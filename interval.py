@@ -26,6 +26,10 @@ class interval:
             return interval(float('-inf'), 1 / b)
         else:
             raise Exception("Nie mozna odwrocic przedzialu zawierajacego zero!")
+    def find(self, x):
+        if self.inf <= x <= self.sup:
+            return True
+        else: return False
         
     #Operacje arytmetyczne 
     def __add__(self, other):
@@ -41,6 +45,19 @@ class interval:
         return interval(min(products), max(products))
     def __truediv__(self, other):
         return self * other.inv()
+    def __pow__(self, exp):
+        a = self.inf
+        b = self.sup
+        if exp == 0:
+            return interval(1,1)
+        if exp % 2 == 0:
+            min_val = min(abs(a), abs(b))**exp
+            max_val = max(abs(a), abs(b))**exp
+            if self.find(0):
+                min_val = 0
+            return interval(min_val, max_val)
+        else: return interval(a**exp, b**exp)
+    
 
     def __str__(self):
         return "[" + str(self.inf) + "," + str(self.sup) + "]"
@@ -48,7 +65,8 @@ class interval:
 
 x = interval(2,5)
 y = interval(-3,-1)
+z = interval(-4, 3)
 
-print(x / y)
+
 
     
