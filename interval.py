@@ -63,10 +63,6 @@ class interval:
         return "[" + str(self.inf) + "," + str(self.sup) + "]"
 
 
-x = interval(2,5)
-y = interval(-3,-1)
-z = interval(-4, 3)
-
 
 
     
