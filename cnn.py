@@ -3,6 +3,7 @@ from scipy.fftpack import dct #Dyskretna transformacja kosinusowa
 import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
+from interval_network import IntervalDeconvNet, train_interval_net, test_and_plot_intervals
 
 #Generowanie danych
 def generate_signal(length=512, num_jumps=5, min_val=0, max_val=1):
@@ -83,12 +84,43 @@ y_train_tensor = torch.tensor(y_train, dtype=torch.float32).unsqueeze(1)
 x_val_tensor = torch.tensor(x_val, dtype=torch.float32).unsqueeze(1)
 y_val_tensor = torch.tensor(y_val, dtype=torch.float32).unsqueeze(1)
 
+x_test_tensor = torch.tensor(x_test, dtype=torch.float32).unsqueeze(1)
+y_test_tensor = torch.tensor(y_test, dtype=torch.float32).unsqueeze(1)
+
 batch_size = 256
 train_ds = TensorDataset(x_train_tensor, y_train_tensor)
 train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
 
 val_ds = TensorDataset(x_val_tensor, y_val_tensor)
 val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
+
+test_ds = TensorDataset(x_test_tensor, y_test_tensor)
+test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
+
+# model przedzialowy
+
+model_inn = IntervalDeconvNet()
+
+# Trening modelu
+train_interval_net(
+    model_inn, 
+    train_loader, 
+    val_loader, 
+    epochs=100,    # liczba epok
+    beta=0.002,    # współczynnik szerokości przedziału
+    patience=10,   # early stopping
+    lr=1e-5        # mały learning rate (jak w artykule)
+)
+
+# Testowanie i wizualizacja
+test_and_plot_intervals(
+    model_inn, 
+    test_loader, 
+    num_examples=5   # liczba wykresów do narysowania
+)
+
+
+
 
 model = DeconvNet()
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
