@@ -3,9 +3,10 @@ from scipy.fftpack import dct #Dyskretna transformacja kosinusowa
 import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
+import matplotlib.pyplot as plt
 
 #Generowanie danych
-def generate_signal(length=512, num_jumps=5, min_val=0, max_val=1):
+def generate_signal(length=512, num_jumps=7, min_val=0, max_val=1):
 
     jump_positions = np.sort(np.random.choice(range(1, length-1), num_jumps, replace=False))
 
@@ -28,7 +29,7 @@ def blur_signal(y):
     S = np.diag(decay)
     A = D.T @ S @ D
     x = A @ y
-    x = x + np.random.normal(0, 0.05, size=x.shape)
+    x = x + np.random.normal(0, 0.05, size=x.shape) #Szum
     return x
 
 #Chcemy wygenerować macierz danych o wymiarach 2000 x 512 (2000 wektorów o 512 wartościach tworzących sygnał)
@@ -153,3 +154,43 @@ with torch.no_grad():
 
 test_loss /= len(test_loader)
 print(f"Test Loss: {test_loss:.4f}")
+
+
+#Ocena niepewności MCDrop
+def mc_dropout_predict(model, x, T=64):
+    
+    model.eval()
+    for m in model.modules():
+        if isinstance(m, nn.Dropout):
+            m.train()  
+
+    preds = []
+    with torch.no_grad():
+        for _ in range(T):
+            pred = model(x)
+            preds.append(pred.unsqueeze(0))  #dodaj wymiar próbki na początku
+
+    preds = torch.cat(preds, dim=0)  #(T, batch_size, 1, length)
+    mean_pred = preds.mean(dim=0)
+    std_pred = preds.std(dim=0)
+    return mean_pred, std_pred
+
+#Próbka do wykresów 
+x_sample = x_test_tensor[0].unsqueeze(0)  #(1, 1, 512)
+
+mean_pred, std_pred = mc_dropout_predict(model, x_sample, T=100)
+
+mean_pred = mean_pred.squeeze().cpu().numpy()
+std_pred = std_pred.squeeze().cpu().numpy()
+true_y = y_test_tensor[0].squeeze().cpu().numpy()
+
+plt.figure(figsize=(12, 6))
+plt.plot(true_y, label="Prawdziwy sygnał")
+plt.plot(mean_pred, label="Średnia predykcja")
+plt.fill_between(np.arange(len(mean_pred)),
+                 mean_pred - 2*std_pred,
+                 mean_pred + 2*std_pred,
+                 color='gray', alpha=0.4, label="Niepewność (±2 std)")
+plt.legend()
+plt.title("Niepewność z MCDrop")
+plt.show()
