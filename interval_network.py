@@ -36,26 +36,30 @@ class IntervalDeconvNet(nn.Module):
     def __init__(self):
         super(IntervalDeconvNet, self).__init__()
         channel_sizes = [1, 16, 32, 64, 128, 256, 128, 64, 32, 1]
-        self.layers = nn.ModuleList()
-        self.dropouts = {}
-
+        layers = []
+        dropout_pos = [4, 7, 9]
         for i in range(len(channel_sizes) - 1):
-            self.layers.append(IntervalConv1d(channel_sizes[i], channel_sizes[i+1], kernel_size=3, padding=1))
-            if i in [4, 7, 9]:
-                self.dropouts[i] = nn.Dropout(p=0.5 if i > 4 else 0.2)
-        self.relu = nn.ReLU()
-
-    def forward(self, input_tensor):
-        input_lower = input_upper = input_tensor
-        for idx, layer in enumerate(self.layers[:-1]):
-            input_lower, input_upper = layer(input_lower, input_upper)
-            input_lower = self.relu(input_lower)
-            input_upper = self.relu(input_upper)
-            if idx in self.dropouts:
-                input_lower = self.dropouts[idx](input_lower)
-                input_upper = self.dropouts[idx](input_upper)
-        input_lower, input_upper = self.layers[-1](input_lower, input_upper)
+            in_c = channel_sizes[i]
+            out_c = channel_sizes[i+1]
+            layers.append(IntervalConv1d(in_c, out_c, kernel_size=3, padding=1))
+            
+            # ReLU tylko jeśli to nie ostatnia warstwa
+            if i < len(channel_sizes) - 2:
+                layers.append(nn.ReLU())
+            # Dropout w określonych miejscach
+            if i in dropout_pos:
+                layers.append(nn.Dropout(p=0.5 if i > 4 else 0.2))
+        self.net = nn.Sequential(*layers)
+    def forward(self, x):
+        input_lower = input_upper = x
+        for layer in self.net:
+            if isinstance(layer, IntervalConv1d):
+                input_lower, input_upper = layer(input_lower, input_upper)
+            else:
+                input_lower = layer(input_lower)
+                input_upper = layer(input_upper)
         return input_lower, input_upper
+
 
 def interval_loss(lower_pred, upper_pred, target, beta=0.002):
     zero = torch.zeros_like(target)
