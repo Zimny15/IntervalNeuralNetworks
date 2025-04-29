@@ -11,7 +11,7 @@ class DeconvNet(nn.Module):
         super(DeconvNet, self).__init__()
         
         layers = []
-        channel_sizes = [1, 16, 32, 64, 128, 256, 128, 64, 32, 16, 1]
+        channel_sizes = [1, 37, 74, 110, 147, 183, 220, 256, 171, 86, 1]
         dropout_pos = [3, 5, 7]
 
         for i in range(len(channel_sizes) - 1):
@@ -125,13 +125,16 @@ if __name__ == "__main__":
     #Zmieniamy dane wejściowe na tensory i tworzymy DataLoader
     x_train_tensor = torch.tensor(x_train, dtype=torch.float32).unsqueeze(1)
     y_train_tensor = torch.tensor(y_train, dtype=torch.float32).unsqueeze(1)
+    torch.save((x_train_tensor, y_train_tensor), "train_data.pth")
 
     x_val_tensor = torch.tensor(x_val, dtype=torch.float32).unsqueeze(1)
     y_val_tensor = torch.tensor(y_val, dtype=torch.float32).unsqueeze(1)
+    torch.save((x_val_tensor, y_val_tensor), "val_data.pth")
 
     x_test_tensor = torch.tensor(x_test, dtype=torch.float32).unsqueeze(1)
     y_test_tensor = torch.tensor(y_test, dtype=torch.float32).unsqueeze(1)
-    
+    torch.save((x_test_tensor, y_test_tensor), "test_data.pth")
+
     batch_size = 256
 
     train_ds = TensorDataset(x_train_tensor, y_train_tensor)
@@ -151,13 +154,6 @@ if __name__ == "__main__":
                               epochs=100, patience=10)
     
     #Testowanie modelu 
-    x_test_tensor = torch.tensor(x_test, dtype=torch.float32).unsqueeze(1)
-    y_test_tensor = torch.tensor(y_test, dtype=torch.float32).unsqueeze(1)
-    torch.save((x_test_tensor, y_test_tensor), "test_data.pth") #Wykorzystamy ten zestaw do porównywania oszacowania niepewności 
-    
-    test_ds = TensorDataset(x_test_tensor, y_test_tensor)
-    test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
-
     model.eval()
     test_loss = 0
     with torch.no_grad():
