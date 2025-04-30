@@ -37,7 +37,7 @@ class IntervalDeconvNet(nn.Module):
         super(IntervalDeconvNet, self).__init__()
         layers = []
         channel_sizes = [1, 37, 74, 110, 147, 183, 220, 256, 171, 86, 1]
-        dropout_pos = [3, 5, 7]
+
         for i in range(len(channel_sizes) - 1):
             in_c = channel_sizes[i]
             out_c = channel_sizes[i+1]
@@ -46,10 +46,11 @@ class IntervalDeconvNet(nn.Module):
             # ReLU tylko jeśli to nie ostatnia warstwa
             if i < len(channel_sizes) - 2:
                 layers.append(nn.ReLU())
-            # Dropout w określonych miejscach
-            if i in dropout_pos:
-                layers.append(nn.Dropout(p=0.5 if i > 4 else 0.2))
+
+            # Dropoutu NIE dodajemy
+
         self.net = nn.Sequential(*layers)
+
     def forward(self, x):
         input_lower = x.clone()
         input_upper = x.clone()
