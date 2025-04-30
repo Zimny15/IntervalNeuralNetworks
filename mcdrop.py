@@ -9,6 +9,23 @@ model = DeconvNet()
 model.load_state_dict(torch.load("base_model.pth"))
 model.eval()
 
+
+# 2. Wczytaj dane treningowe, walidacyjne i testowe
+x_train_tensor, y_train_tensor = torch.load("train_data.pth")
+x_val_tensor, y_val_tensor = torch.load("val_data.pth")
+x_test_tensor, y_test_tensor = torch.load("test_data.pth")
+
+batch_size = 256
+
+train_ds = torch.utils.data.TensorDataset(x_train_tensor, y_train_tensor)
+train_loader = torch.utils.data.DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+
+val_ds = torch.utils.data.TensorDataset(x_val_tensor, y_val_tensor)
+val_loader = torch.utils.data.DataLoader(val_ds, batch_size=batch_size, shuffle=False)
+
+test_ds = torch.utils.data.TensorDataset(x_test_tensor, y_test_tensor)
+test_loader = torch.utils.data.DataLoader(test_ds, batch_size=batch_size, shuffle=False)
+
 def mc_dropout_predict(model, x, T=64):
     
     model.eval()
@@ -52,36 +69,46 @@ plt.title("Niepewność z MCDrop")
 plt.show()
 
 
-# Tworzymy nową sieć przedziałową
+# 1. Stwórz model przedziałowy
 model_inn = IntervalDeconvNet()
 
-# Kopiujemy wytrenowane parametry DeconvNet -> IntervalDeconvNet
-with torch.no_grad():
-    for layer_inn, layer_base in zip(model_inn.net, model.net):
-        if isinstance(layer_inn, IntervalConv1d) and isinstance(layer_base, nn.Conv1d):
-            layer_inn.weight_lower.copy_(layer_base.weight)
-            layer_inn.weight_upper.copy_(layer_base.weight)
-            layer_inn.bias_lower.copy_(layer_base.bias)
-            layer_inn.bias_upper.copy_(layer_base.bias)
+# 2. Skopiuj wagi z DeconvNet do IntervalDeconvNet (bez torch.no_grad!)
+base_convs = [layer for layer in model.net if isinstance(layer, nn.Conv1d)]
+inn_convs = [layer for layer in model_inn.net if isinstance(layer, IntervalConv1d)]
 
-# UWAGA! Potrzebujesz danych treningowych do trenowania szerokości przedziałów
-# Jeśli nie masz zapisanych x_train_tensor, y_train_tensor -> musisz je wczytać z pliku lub wygenerować
-# Załaduj train_loader, val_loader odpowiednio!
+assert len(base_convs) == len(inn_convs), "Liczba warstw Conv1d nie zgadza się!"
 
-# Trenujemy szerokości przedziałów
+for layer_inn, layer_base in zip(inn_convs, base_convs):
+    layer_inn.weight_lower.data.copy_(layer_base.weight.data)
+    layer_inn.weight_upper.data.copy_(layer_base.weight.data)
+    layer_inn.bias_lower.data.copy_(layer_base.bias.data)
+    layer_inn.bias_upper.data.copy_(layer_base.bias.data)
+
+# 3. Upewnij się, że parametry są trenowalne
+for name, param in model_inn.named_parameters():
+    param.requires_grad = True
+
+# (opcjonalnie: diagnostyka)
+print("Przykładowy parametr i jego status gradientu:")
+for name, param in model_inn.named_parameters():
+    print(name, "-> requires_grad =", param.requires_grad)
+    break  # tylko jeden przykład
+
+# 4. Trenujemy szerokości przedziałów
 train_interval_net(
-    model_inn, 
-    train_loader,    # <- musi być zdefiniowany wcześniej!
-    val_loader,      # <- musi być zdefiniowany wcześniej!
-    epochs=30,       
-    beta=0.002,      
+    model_inn,
+    train_loader,
+    val_loader,
+    epochs=30,
+    beta=0.05,
     patience=5,
-    lr=1e-6
+    lr=1e-3
 )
 
-# Predykcja IntervalNet na tej samej próbce
+# 5. Predykcja i wykres dla jednej próbki
 model_inn.eval()
-x_sample = x_test_tensor[0].unsqueeze(0)
+
+x_sample = x_test_tensor[0].unsqueeze(0)  # (1, 1, 512)
 
 with torch.no_grad():
     lower, upper = model_inn(x_sample)
@@ -92,7 +119,7 @@ with torch.no_grad():
 
 true_y = y_test_tensor[0].squeeze().numpy()
 
-# Wykres przedziałowej sieci
+# 6. Generowanie wykresu
 plt.figure(figsize=(12, 6))
 plt.plot(true_y, label="Prawdziwy sygnał")
 plt.plot(mean_pred, label="Predykcja")

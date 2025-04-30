@@ -35,9 +35,9 @@ class IntervalConv1d(nn.Module):
 class IntervalDeconvNet(nn.Module):
     def __init__(self):
         super(IntervalDeconvNet, self).__init__()
-        channel_sizes = [1, 16, 32, 64, 128, 256, 128, 64, 32, 1]
         layers = []
-        dropout_pos = [4, 7, 9]
+        channel_sizes = [1, 37, 74, 110, 147, 183, 220, 256, 171, 86, 1]
+        dropout_pos = [3, 5, 7]
         for i in range(len(channel_sizes) - 1):
             in_c = channel_sizes[i]
             out_c = channel_sizes[i+1]
@@ -51,7 +51,8 @@ class IntervalDeconvNet(nn.Module):
                 layers.append(nn.Dropout(p=0.5 if i > 4 else 0.2))
         self.net = nn.Sequential(*layers)
     def forward(self, x):
-        input_lower = input_upper = x
+        input_lower = x.clone()
+        input_upper = x.clone()
         for layer in self.net:
             if isinstance(layer, IntervalConv1d):
                 input_lower, input_upper = layer(input_lower, input_upper)
@@ -65,10 +66,12 @@ def interval_loss(lower_pred, upper_pred, target, beta=0.002):
     zero = torch.zeros_like(target)
     lower_violation = torch.maximum(target - upper_pred, zero)
     upper_violation = torch.maximum(lower_pred - target, zero)
-    penalty = beta * (upper_pred - lower_pred)
+    width = torch.abs(upper_pred - lower_pred)  # kluczowa zmiana
+    penalty = beta * width
     return (lower_violation ** 2 + upper_violation ** 2 + penalty).mean()
 
-def train_interval_net(model, train_loader, val_loader, epochs=100, beta=0.002, patience=10, lr=1e-5):
+
+def train_interval_net(model, train_loader, val_loader, epochs=100, beta=0.02, patience=10, lr=1e-5):
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     best_val_loss = float('inf')
     best_model_state = None
@@ -93,8 +96,16 @@ def train_interval_net(model, train_loader, val_loader, epochs=100, beta=0.002, 
                 loss = interval_loss(output_lower, output_upper, yb, beta=beta)
                 val_loss += loss.item()
         val_loss /= len(val_loader)
+        
+        # <<< DIAGNOSTYKA – średnia szerokość przedziału >>>
+        with torch.no_grad():
+            xb_sample, _ = next(iter(val_loader))
+            output_lower, output_upper = model(xb_sample)
+            interval_width = (output_upper - output_lower).mean().item()
+            print(f"Średnia szerokość przedziału (val): {interval_width:.6f}")
 
         print(f"Epoch {epoch+1}, Train Loss: {total_loss / len(train_loader):.6f}, Validation Loss: {val_loss:.6f}")
+        
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
