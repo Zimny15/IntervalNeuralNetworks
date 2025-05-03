@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
-from cnn import DeconvNet  # zakładam, że masz klasę DeconvNet w cnn.py
+from cnn import DeconvNet  
 
-# 1. Wczytanie bazowego modelu i danych
+# Bazowy modelu + dane
 base_model = DeconvNet()
 base_model.load_state_dict(torch.load("base_model.pth"))
 base_model.eval()
@@ -18,7 +18,7 @@ train_loader = DataLoader(TensorDataset(x_train_tensor, y_train_tensor), batch_s
 val_loader = DataLoader(TensorDataset(x_val_tensor, y_val_tensor), batch_size=batch)
 test_loader = DataLoader(TensorDataset(x_test_tensor, y_test_tensor), batch_size=batch)
 
-# 2. Definicja sieci przedziałowej
+# Definicja sieci przedziałowej
 class IntervalDeconvNet(nn.Module):
     def __init__(self, base_model):
         super().__init__()
@@ -26,8 +26,8 @@ class IntervalDeconvNet(nn.Module):
         self.upper_net = DeconvNet()
         self.lower_net.load_state_dict(base_model.state_dict())
         self.upper_net.load_state_dict(base_model.state_dict())
-        # Zamrażamy oryginalne parametry (opcjonalnie)
-        for param in base_model.parameters():
+        
+        for param in base_model.parameters(): # Zamrażanie oryginalnych parametrów
             param.requires_grad = False
 
     def forward(self, x):
@@ -35,7 +35,7 @@ class IntervalDeconvNet(nn.Module):
         upper = self.upper_net(x)
         return lower, upper
 
-# 3. Funkcja straty dla INN
+# Funkcja straty dla INN
 def inn_loss_fn(lower, upper, target, beta=0.002):
     zero = torch.zeros_like(target)
     lower_violation = torch.maximum(lower - target, zero)
@@ -44,7 +44,7 @@ def inn_loss_fn(lower, upper, target, beta=0.002):
     loss = (lower_violation**2 + upper_violation**2).mean() + beta * interval_width.mean()
     return loss
 
-# 4. Trening INN
+# Trening
 inn_model = IntervalDeconvNet(base_model)
 optimizer = torch.optim.Adam(list(inn_model.lower_net.parameters()) + list(inn_model.upper_net.parameters()), lr=1e-5)
 
@@ -80,13 +80,13 @@ for epoch in range(100):
     else:
         epochs_no_improve += 1
         if epochs_no_improve >= patience:
-            print("Early stopping.")
+            print("Early stopping")
             break
 
 if best_state:
     inn_model.load_state_dict(best_state)
 
-# 5. Ewaluacja testowa
+# Test
 inn_model.eval()
 test_loss = 0
 total, covered = 0, 0
@@ -113,7 +113,7 @@ idx = 0
 sample_x = x_test_tensor[idx:idx+1]  # batch dimension zachowany
 true_y = y_test_tensor[idx].squeeze().cpu().numpy()
 
-# Model w trybie ewaluacyjnym
+
 inn_model.eval()
 with torch.no_grad():
     lower, upper = inn_model(sample_x)
@@ -121,7 +121,7 @@ with torch.no_grad():
     upper = upper.squeeze().cpu().numpy()
     mean_pred = ((lower + upper) / 2)
 
-# Wykres
+# Wykresy
 plt.figure(figsize=(14, 6))
 plt.plot(true_y, label="Oryginalny sygnał (true)", color="blue")
 plt.plot(mean_pred, label="Średnia predykcja", color="orange")

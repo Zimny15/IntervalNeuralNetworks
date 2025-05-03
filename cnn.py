@@ -34,7 +34,7 @@ class DeconvNet(nn.Module):
         return self.net(x)
 
 # Generowanie danych
-def generate_signal(length=512, num_jumps=7, min_val=0, max_val=1):
+def generate_signal(length=512, num_jumps=20, min_val=-1, max_val=1):
 
     jump_positions = np.sort(np.random.choice(range(1, length-1), num_jumps, replace=False))
 
@@ -50,15 +50,18 @@ def generate_signal(length=512, num_jumps=7, min_val=0, max_val=1):
     
     return signal
 
-def blur_signal(y):
+def blur_signal(y, noise = True):
     length = len(y)
     D = dct(np.eye(length), norm='ortho')  
     decay = np.exp(-np.linspace(0, 5, length))  #Wartości malejące wykładniczo
     S = np.diag(decay)
     A = D.T @ S @ D
     x = A @ y
-    x = x + np.random.normal(0, 0.05, size=x.shape) #Szum
-    return x
+    if noise:
+        g_noise = np.random.normal(0, 0.05, size=y.shape)
+        x = x + g_noise
+        y = y + g_noise
+    return x, y
 
 
 def train_model(model, train_loader, val_loader, loss_fn, optimizer, epochs=100, patience=10):
@@ -113,8 +116,8 @@ if __name__ == "__main__":
 
     for i in range(num_samples):
         y = generate_signal(length=signal_length)
-        x = blur_signal(y)
-        y_matrix[i] = y
+        x, y = blur_signal(y)
+        y_matrix[i] = y 
         x_matrix[i] = x
 
     #Tworzenie sieci 
